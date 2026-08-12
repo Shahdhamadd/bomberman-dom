@@ -1,0 +1,7 @@
+# Dependencies — reinstall anytime with `npm install`
+node_modules/
+
+# Logs and OS junk
+*.log
+.DS_Store
+Thumbs.db
