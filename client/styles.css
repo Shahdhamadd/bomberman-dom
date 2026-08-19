@@ -1,6 +1,6 @@
 :root {
-  --font-arcade: "Press Start 2P", ui-monospace, "Courier New", monospace;
-  --font-ui: "Baloo 2", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-arcade: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  --font-ui: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
 
   --sky-top: #5cb3ff;
   --sky-bot: #2b6fc4;
@@ -88,6 +88,59 @@ body::before {
   width: min(480px, 94vw);
   padding: 30px 28px;
   text-align: center;
+}
+.card.wide {
+  width: min(600px, 94vw);
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0 0 18px;
+}
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 14px 10px;
+  background: #0d1a3a;
+  color: var(--text);
+  border: 2px solid var(--panel-line);
+  border-radius: 14px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  text-align: center;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08);
+  transition: transform 0.06s ease, border-color 0.12s ease;
+}
+.mode-card:hover {
+  border-color: var(--panel-line-hi);
+  transform: translateY(-2px);
+}
+.mode-card.on {
+  border-color: var(--yellow);
+  background: #16305e;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.12), 0 0 0 3px rgba(255, 210, 63, 0.22);
+}
+.mode-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.mode-name {
+  font-family: var(--font-arcade);
+  font-size: 10px;
+  color: var(--yellow);
+}
+.mode-card.on .mode-name {
+  color: #fff;
+}
+.mode-blurb {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.35;
 }
 
 .logo {
@@ -253,6 +306,55 @@ body::before {
   color: var(--yellow);
 }
 
+.mode-badge {
+  display: inline-block;
+  margin: 4px 0 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 210, 63, 0.14);
+  border: 2px solid rgba(255, 210, 63, 0.5);
+  color: var(--yellow);
+  font-family: var(--font-arcade);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+.bot-line {
+  margin: -8px 0 16px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.team-groups {
+  display: grid;
+  gap: 12px;
+}
+.team-group {
+  padding: 12px;
+  border: 2px dashed var(--panel-line);
+  border-radius: 14px;
+  background: rgba(11, 21, 48, 0.55);
+}
+.team-group.team-red {
+  border-color: rgba(255, 91, 91, 0.6);
+}
+.team-group.team-blue {
+  border-color: rgba(74, 163, 255, 0.6);
+}
+.team-label {
+  font-family: var(--font-arcade);
+  font-size: 9px;
+  margin-bottom: 10px;
+  letter-spacing: 0.05em;
+}
+.team-group.team-red .team-label {
+  color: var(--p-red);
+}
+.team-group.team-blue .team-label {
+  color: var(--p-blue);
+}
+
 .panel-title {
   margin: 0 0 12px;
   font-family: var(--font-arcade);
@@ -314,10 +416,11 @@ body::before {
 .game {
   display: grid;
   gap: 20px;
-  grid-template-columns: auto 320px;
+  grid-template-columns: 600px 320px;
+  justify-content: center;
   max-width: 1120px;
   margin: 0 auto;
-  align-items: start;
+  align-items: stretch;
 }
 @media (max-width: 940px) {
   .game {
@@ -331,14 +434,26 @@ body::before {
 }
 .game-side {
   padding: 22px;
+  display: flex;
+  flex-direction: column;
+}
+/* In-game chat fills the sidebar so it balances the board height (lobby chat keeps its fixed height). */
+.game-side .chat {
+  flex: 1;
+  height: auto;
 }
 
 .game-bar {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
+  align-items: flex-start;
+  gap: 10px;
   flex-wrap: wrap;
+}
+/* Give the scoreboard its own row so the FPS badge + Leave button always sit on
+   the line below it — they no longer jump down when the HUD widens as players
+   collect power-ups. */
+.game-bar .hud {
+  flex-basis: 100%;
 }
 
 .hud {
@@ -349,8 +464,8 @@ body::before {
 .hud-player {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 7px;
+  padding: 6px 10px;
   background: linear-gradient(180deg, var(--panel), var(--panel-2));
   border: 2px solid var(--panel-line);
   border-radius: 12px;
@@ -364,6 +479,79 @@ body::before {
   opacity: 0.45;
   filter: grayscale(1);
 }
+.hud-player.ghost {
+  border-color: #8fd8ff;
+  background: linear-gradient(180deg, #1b3358, #0f2038);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.12), 0 0 0 2px rgba(143, 216, 255, 0.22);
+}
+.hud-player.ghost .hud-stats {
+  color: #a8e2ff;
+}
+
+.hud.teams {
+  gap: 12px;
+  align-items: flex-start;
+}
+.hud-team {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 2px dashed var(--panel-line);
+  border-radius: 14px;
+  background: rgba(11, 21, 48, 0.45);
+}
+.hud-team-name {
+  font-family: var(--font-arcade);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+}
+.hud-team-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ghost-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 2px solid rgba(143, 216, 255, 0.55);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(40, 90, 150, 0.5), rgba(12, 28, 56, 0.75));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.12);
+}
+.ghost-tag {
+  font-family: var(--font-arcade);
+  font-size: 11px;
+  color: #cdeeff;
+  text-shadow: 0 0 10px rgba(140, 215, 255, 0.8);
+  animation: ghostGlow 1.4s ease-in-out infinite alternate;
+}
+.ghost-hint {
+  font-weight: 800;
+  color: #ffd9a8;
+  font-variant-numeric: tabular-nums;
+}
+.ghost-hint.ready {
+  color: var(--ok);
+}
+.ghost-tip {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13px;
+  margin-left: auto;
+}
+@keyframes ghostGlow {
+  from {
+    opacity: 0.7;
+  }
+  to {
+    opacity: 1;
+  }
+}
 .hud-dot {
   width: 16px;
   height: 16px;
@@ -375,12 +563,73 @@ body::before {
   font-family: var(--font-arcade);
   font-size: 10px;
   letter-spacing: 0.3px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .hud-stats {
   color: var(--muted);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.bar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.leave-wrap {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.lobby-main .leave-wrap {
+  margin-top: 18px;
+}
+.leave-btn {
+  font-family: var(--font-arcade);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  padding: 11px 13px;
+  color: var(--text);
+  background: #0d1a3a;
+  border: 2px solid var(--panel-line);
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08);
+  transition: border-color 0.12s ease, transform 0.05s ease;
+}
+.leave-btn:hover {
+  border-color: var(--p-red);
+  color: #ffd0d0;
+}
+.leave-btn:active {
+  transform: translateY(2px);
+}
+.leave-btn.danger {
+  background: linear-gradient(180deg, #ff6a6a, #d02b2b);
+  border-color: #ff9a9a;
+  color: #330707;
+}
+
+.over-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.btn.waiting {
+  filter: saturate(0.5) brightness(0.85);
+}
+.over-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13px;
 }
 
 .fps {
@@ -401,6 +650,13 @@ body::before {
   box-shadow: 0 0 0 4px #4a63b0, 0 0 0 9px #223463,
     0 0 0 13px #0b1330, 0 10px 0 rgba(0, 0, 0, 0.25),
     0 26px 46px rgba(4, 12, 34, 0.55);
+  /* Auto-fit: scale the whole board (grid + sprites together) so the entire map
+     is always visible, whatever the window size. Driven by fit.js via CSS vars
+     so the framework's re-renders never wipe it. Full size (scale 1) by default. */
+  transform-origin: top left;
+  transform: scale(var(--board-scale, 1));
+  margin-right: var(--board-mr, 0px);
+  margin-bottom: var(--board-mb, 0px);
 }
 .board {
   position: absolute;
@@ -414,7 +670,7 @@ body::before {
     var(--grass-2) 90deg 180deg
   );
   background-size: 80px 80px;
-  box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.28), inset 0 0 42px rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.28);
 }
 
 .tile {
@@ -427,15 +683,14 @@ body::before {
   background: linear-gradient(155deg, var(--wall-hi), var(--wall-mid) 55%, var(--wall-lo));
   border-radius: 7px;
   box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.55),
-    inset -3px -3px 0 rgba(0, 0, 0, 0.38), inset 0 0 0 1px rgba(0, 0, 0, 0.25),
-    0 3px 4px rgba(0, 0, 0, 0.4);
+    inset -3px -3px 0 rgba(0, 0, 0, 0.38), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
 }
 
 .tile.block {
   background: linear-gradient(180deg, var(--brick-hi), var(--brick-lo));
   border-radius: 6px;
   box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.32),
-    inset -3px -3px 0 rgba(0, 0, 0, 0.34), 0 2px 3px rgba(0, 0, 0, 0.35);
+    inset -3px -3px 0 rgba(0, 0, 0, 0.34);
 }
 .tile.block::before {
   content: "";
@@ -462,12 +717,11 @@ body::before {
   left: 0;
   width: 40px;
   height: 40px;
-  will-change: transform;
 }
 
 .player {
   z-index: 2;
-  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.5));
+  will-change: transform;
 }
 .char {
   width: 100%;
@@ -498,6 +752,25 @@ body::before {
   filter: grayscale(1);
   z-index: 1;
 }
+.player.ghost {
+  z-index: 4;
+  opacity: 0.5;
+}
+.player.ghost .char {
+  animation: ghostFloat 1.6s ease-in-out infinite alternate;
+}
+.player.ghost .name-tag {
+  background: rgba(80, 160, 220, 0.85);
+  border-color: rgba(200, 240, 255, 0.6);
+}
+@keyframes ghostFloat {
+  from {
+    transform: translateY(-1px) scale(0.97);
+  }
+  to {
+    transform: translateY(-5px) scale(1.02);
+  }
+}
 @keyframes blink {
   to {
     opacity: 0.3;
@@ -506,6 +779,10 @@ body::before {
 
 .bomb {
   z-index: 1;
+  will-change: transform;
+}
+.bomb.spirit {
+  opacity: 0.9;
 }
 .bomb-svg {
   transform-origin: 50% 58%;
@@ -551,11 +828,9 @@ body::before {
 }
 @keyframes flamein {
   from {
-    transform: scale(0.4);
-    opacity: 0.4;
+    opacity: 0.35;
   }
   to {
-    transform: scale(1);
     opacity: 1;
   }
 }
@@ -584,6 +859,12 @@ body::before {
 }
 .powerup-speed .powerup-tile {
   background: radial-gradient(circle at 50% 34%, #c4ecff, #56b7ff);
+}
+.powerup-life .powerup-tile {
+  background: radial-gradient(circle at 50% 34%, #ffd7ea, #ff6fa8);
+}
+.powerup-kick .powerup-tile {
+  background: radial-gradient(circle at 50% 34%, #d8ffcf, #62d96b);
 }
 @keyframes bob {
   from {
