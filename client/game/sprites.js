@@ -17,12 +17,15 @@ export function playerSvg(color) {
   </svg>`;
 }
 
-export function bombSvg() {
+export function bombSvg(spirit) {
+  const shell = spirit ? "#7fd4ff" : "#20242e";
+  const gloss = spirit ? "rgba(255,255,255,.5)" : "rgba(255,255,255,.22)";
+  const cap = spirit ? "#bde9ff" : "#3a4050";
   return `<svg class="char bomb-svg" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
     <ellipse cx="20" cy="35" rx="10" ry="2" fill="rgba(0,0,0,.3)"/>
-    <circle cx="20" cy="23" r="12" fill="#20242e"/>
-    <circle cx="15.5" cy="18.5" r="3.4" fill="rgba(255,255,255,.22)"/>
-    <rect x="17" y="8.5" width="6" height="4" rx="1.4" fill="#3a4050"/>
+    <circle cx="20" cy="23" r="12" fill="${shell}"/>
+    <circle cx="15.5" cy="18.5" r="3.4" fill="${gloss}"/>
+    <rect x="17" y="8.5" width="6" height="4" rx="1.4" fill="${cap}"/>
     <path d="M20 9 Q27 5 24 1.6" stroke="#caa24d" stroke-width="1.7" fill="none" stroke-linecap="round"/>
     <circle class="spark" cx="24" cy="1.6" r="2.3" fill="#ffd23f"/>
   </svg>`;
@@ -40,6 +43,19 @@ export function powerupSvg(kind) {
   if (kind === "flame") {
     return icon(
       `<path d="M20 5 C25 11 27 15 27 20 a7 7 0 0 1-14 0 c0-3 1.5-5 3-7 c.8 2.6 2.8 2.6 2.8 .8 c0-3-1.8-5 1.2-9.6 Z" fill="#20242e"/>`
+    );
+  }
+  if (kind === "life") {
+    return icon(
+      `<path d="M20 34 C6 24 4 16.5 8.5 11.6 a8 8 0 0 1 11.5 .6 a8 8 0 0 1 11.5-.6 C36 16.5 34 24 20 34 Z" fill="#20242e"/>`
+    );
+  }
+  if (kind === "kick") {
+    return icon(
+      `<path d="M9 9 h6 v11 l9 4.5 a3.2 3.2 0 0 1 1.8 2.9 V31 H9 Z" fill="#20242e"/>
+       <circle cx="32" cy="13" r="5" fill="#20242e"/>
+       <path d="M32 8 Q35.5 5.5 34 3" stroke="#20242e" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+       <path d="M20 6 h5 M22 11 h5" stroke="#20242e" stroke-width="1.8" stroke-linecap="round"/>`
     );
   }
   return icon(`<path d="M23 4 L11 23 h7 l-2.5 13 L29 16 h-7 l3-12 Z" fill="#20242e"/>`);
