@@ -34,23 +34,30 @@ const server = http.createServer((req, res) => {
       return;
     }
     const type = MIME[path.extname(filePath)] || "application/octet-stream";
-    res.writeHead(200, { "Content-Type": type });
+    res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-cache" });
     res.end(data);
   });
 });
 
 const WAIT_SECONDS = 20;
 const COUNTDOWN_SECONDS = 10;
-const MAX_PLAYERS = 4;
-const MIN_PLAYERS = 2;
+const SEATS = 4;
+
+const MODES = {
+  versus: { label: "Versus", minHumans: 2, maxHumans: 4, fill: false, teams: false, instant: false },
+  teams: { label: "Teams", minHumans: 2, maxHumans: 4, fill: true, teams: true, instant: false },
+  coop: { label: "Co-op vs AI", minHumans: 2, maxHumans: 3, fill: true, teams: true, instant: false },
+  solo: { label: "Solo vs AI", minHumans: 1, maxHumans: 1, fill: true, teams: true, instant: true },
+};
+
+const BOT_NAMES = ["Bombot", "Sparky", "Fuse", "Blastr"];
 
 let nextPlayerId = 1;
-let nextRoomId = 1;
 const rooms = [];
 
-function createRoom() {
+function createRoom(mode) {
   const room = {
-    id: nextRoomId++,
+    mode,
     players: [],
     phase: "waiting",
     secondsLeft: null,
@@ -62,11 +69,44 @@ function createRoom() {
   return room;
 }
 
-function openRoom() {
+function openRoom(mode) {
+  if (MODES[mode].instant) return createRoom(mode);
   const room = rooms.find(
-    (r) => !r.started && r.phase !== "countdown" && r.players.length < MAX_PLAYERS
+    (r) =>
+      r.mode === mode &&
+      !r.started &&
+      r.phase !== "countdown" &&
+      r.players.length < MODES[mode].maxHumans
   );
-  return room || createRoom();
+  return room || createRoom(mode);
+}
+
+function teamForSeat(room, seat) {
+  if (!MODES[room.mode].teams) return null;
+  return room.mode === "teams" ? seat % 2 : 0;
+}
+
+function buildSeats(room) {
+  const cfg = MODES[room.mode];
+  const humans = room.players.filter((p) => p.connected);
+  const seats = humans.map((p, i) => ({
+    id: p.id,
+    nickname: p.nickname,
+    bot: false,
+    team: teamForSeat(room, i),
+  }));
+
+  if (!cfg.fill) return seats;
+
+  for (let i = seats.length; i < SEATS; i++) {
+    seats.push({
+      id: -(i + 1),
+      nickname: BOT_NAMES[i % BOT_NAMES.length],
+      bot: true,
+      team: room.mode === "teams" ? i % 2 : 1,
+    });
+  }
+  return seats;
 }
 
 function send(ws, obj) {
@@ -80,14 +120,25 @@ function broadcast(room, obj) {
   }
 }
 
+function roster(room) {
+  return room.players
+    .filter((p) => p.connected)
+    .map((p, i) => ({ id: p.id, nickname: p.nickname, team: teamForSeat(room, i) }));
+}
+
 function lobbyState(room) {
+  const cfg = MODES[room.mode];
+  const humans = connectedCount(room);
   return {
     type: "lobby",
+    mode: room.mode,
+    modeLabel: cfg.label,
+    maxHumans: cfg.maxHumans,
+    minHumans: cfg.minHumans,
+    bots: cfg.fill ? Math.max(0, SEATS - humans) : 0,
     phase: room.phase,
     secondsLeft: room.secondsLeft,
-    players: room.players
-      .filter((p) => p.connected)
-      .map((p) => ({ id: p.id, nickname: p.nickname })),
+    players: roster(room),
   };
 }
 
@@ -108,15 +159,21 @@ function connectedCount(room) {
 
 function evaluate(room) {
   if (room.started) return;
+  const cfg = MODES[room.mode];
   const n = connectedCount(room);
 
+  if (cfg.instant) {
+    if (n >= cfg.minHumans) startGame(room);
+    return;
+  }
+
   if (room.phase === "waiting") {
-    if (n >= MIN_PLAYERS) startFilling(room);
+    if (n >= cfg.minHumans) startFilling(room);
   } else if (room.phase === "filling") {
-    if (n >= MAX_PLAYERS) startCountdown(room);
-    else if (n < MIN_PLAYERS) backToWaiting(room);
+    if (n >= cfg.maxHumans) startCountdown(room);
+    else if (n < cfg.minHumans) backToWaiting(room);
   } else if (room.phase === "countdown") {
-    if (n < MIN_PLAYERS) backToWaiting(room);
+    if (n < cfg.minHumans) backToWaiting(room);
   }
 }
 
@@ -153,14 +210,45 @@ function backToWaiting(room) {
 
 function startGame(room) {
   clearTimer(room);
+  if (room.game) gameLogic.stopGame(room.game);
+  for (const p of room.players) p.rematch = false;
   room.started = true;
   room.phase = "playing";
   room.secondsLeft = null;
 
-  const game = gameLogic.createGame(room.players.filter((p) => p.connected));
-  game.emit = (msg) => broadcast(room, msg);
+  const game = gameLogic.createGame(buildSeats(room), room.mode);
+  game.emit = (msg) => {
+    broadcast(room, msg);
+    if (msg.type === "game_over") checkRematch(room);
+  };
   room.game = game;
   broadcast(room, gameLogic.startPayload(game));
+  gameLogic.startLoop(game);
+}
+
+function returnToLobby(room) {
+  clearTimer(room);
+  if (room.game) gameLogic.stopGame(room.game);
+  room.game = null;
+  room.started = false;
+  room.phase = "waiting";
+  room.secondsLeft = null;
+  for (const p of room.players) p.rematch = false;
+  broadcastLobby(room);
+  evaluate(room);
+}
+
+function checkRematch(room) {
+  if (!room.game || !room.game.over) return;
+  const humans = room.players.filter((p) => p.connected);
+  if (!humans.length) return;
+
+  const ready = humans.filter((p) => p.rematch).length;
+  broadcast(room, { type: "rematch_state", ready, total: humans.length });
+  if (ready < humans.length) return;
+
+  if (humans.length >= MODES[room.mode].minHumans) startGame(room);
+  else returnToLobby(room);
 }
 
 const wss = new WebSocketServer({ server });
@@ -182,6 +270,8 @@ wss.on("connection", (ws) => {
     else if (msg.type === "chat") handleChat(ws, msg);
     else if (msg.type === "input") handleInput(ws, msg);
     else if (msg.type === "bomb") handleBomb(ws);
+    else if (msg.type === "leave") handleQuit(ws);
+    else if (msg.type === "rematch") handleRematch(ws);
   });
 
   ws.on("close", () => handleLeave(ws));
@@ -195,21 +285,14 @@ function handleJoin(ws, msg) {
     return;
   }
 
-  const room = openRoom();
-  const player = { id: nextPlayerId++, nickname, ws, connected: true };
+  const mode = MODES[msg.mode] ? msg.mode : "versus";
+  const room = openRoom(mode);
+  const player = { id: nextPlayerId++, nickname, ws, connected: true, rematch: false };
   room.players.push(player);
   ws.player = player;
   ws.room = room;
 
-  send(ws, {
-    type: "joined",
-    id: player.id,
-    phase: room.phase,
-    secondsLeft: room.secondsLeft,
-    players: room.players
-      .filter((p) => p.connected)
-      .map((p) => ({ id: p.id, nickname: p.nickname })),
-  });
+  send(ws, Object.assign(lobbyState(room), { type: "joined", id: player.id }));
   broadcastLobby(room);
   evaluate(room);
 }
@@ -241,6 +324,48 @@ function handleBomb(ws) {
   gameLogic.placeBomb(room.game, ws.player.id);
 }
 
+function handleRematch(ws) {
+  const room = ws.room;
+  const player = ws.player;
+  if (!room || !player) return;
+  if (!room.game || !room.game.over) return;
+  if (player.rematch) return;
+  player.rematch = true;
+  checkRematch(room);
+}
+
+function handleQuit(ws) {
+  const room = ws.room;
+  const player = ws.player;
+  if (!room || !player) return;
+
+  if (room.game && !room.game.over) gameLogic.killPlayer(room.game, player.id);
+  room.players = room.players.filter((p) => p !== player);
+  player.connected = false;
+  ws.player = null;
+  ws.room = null;
+
+  send(ws, { type: "left" });
+  releaseRoom(room);
+}
+
+function releaseRoom(room) {
+  if (!room.players.some((p) => p.connected)) {
+    clearTimer(room);
+    if (room.game) gameLogic.stopGame(room.game);
+    const i = rooms.indexOf(room);
+    if (i !== -1) rooms.splice(i, 1);
+    return;
+  }
+
+  if (room.game && room.game.over) {
+    checkRematch(room);
+  } else if (!room.game) {
+    broadcastLobby(room);
+    evaluate(room);
+  }
+}
+
 function handleLeave(ws) {
   const room = ws.room;
   if (!room) return;
@@ -258,15 +383,7 @@ function handleLeave(ws) {
   ws.player = null;
   ws.room = null;
 
-  if (!room.players.some((p) => p.connected)) {
-    clearTimer(room);
-    if (room.game) gameLogic.stopGame(room.game);
-    const i = rooms.indexOf(room);
-    if (i !== -1) rooms.splice(i, 1);
-  } else if (!room.game) {
-    broadcastLobby(room);
-    evaluate(room);
-  }
+  releaseRoom(room);
 }
 
 server.listen(PORT, () => {
