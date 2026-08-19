@@ -70,8 +70,7 @@
         const cls = value == null ? "" : String(value);
         if (element.getAttribute("class") !== cls) element.setAttribute("class", cls);
       } else if (key === "style" && typeof value === "object") {
-        element.removeAttribute("style");
-        Object.assign(element.style, value);
+        applyStyle(element, oldAttrs[key], value);
       } else if (value === false || value == null) {
         element.removeAttribute(key);
       } else if (value === true) {
@@ -79,6 +78,21 @@
       } else if (element.getAttribute(key) !== String(value)) {
         element.setAttribute(key, value);
       }
+    }
+  }
+
+  function applyStyle(element, oldStyle, newStyle) {
+    const style = element.style;
+
+    if (oldStyle && typeof oldStyle === "object") {
+      for (const name in oldStyle) {
+        if (!(name in newStyle)) style[name] = "";
+      }
+    }
+
+    for (const name in newStyle) {
+      const next = newStyle[name];
+      if (style[name] !== next) style[name] = next;
     }
   }
 
@@ -139,6 +153,19 @@
       const key = keyOf(vnode);
       if (key != null) oldByKey.set(key, { node: parent.childNodes[i], vnode });
     });
+
+    const liveKeys = new Set();
+    for (const child of newChildren) {
+      const key = keyOf(child);
+      if (key != null) liveKeys.add(key);
+    }
+
+    for (const [key, entry] of oldByKey) {
+      if (liveKeys.has(key)) continue;
+      if (entry.node && entry.node.parentNode === parent) {
+        parent.removeChild(entry.node);
+      }
+    }
 
     newChildren.forEach((newChild, i) => {
       const key = keyOf(newChild);
