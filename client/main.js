@@ -6,10 +6,17 @@ import { gameScreen } from "./game/board.js";
 import { gameoverScreen } from "./screens/gameover.js";
 import { initInput } from "./game/input.js";
 import * as entities from "./game/entities.js";
+import * as tiles from "./game/tiles.js";
+import { initFit, scheduleFit } from "./game/fit.js";
 
 const store = createStore({
   screen: "nickname",
   nickname: "",
+  mode: "versus",
+  modeLabel: "Versus",
+  minHumans: 2,
+  maxHumans: 4,
+  bots: 0,
   me: null,
   players: [],
   phase: "waiting",
@@ -18,6 +25,11 @@ const store = createStore({
   error: null,
   game: null,
   winner: null,
+  winnerTeam: null,
+  rematchReady: 0,
+  rematchTotal: 0,
+  rematchSent: false,
+  confirmLeave: false,
 });
 
 const net = connect({
@@ -26,25 +38,38 @@ const net = connect({
   onClose: () => store.setState({ error: "Disconnected from the server." }),
 });
 
+function lobbyPatch(msg) {
+  return {
+    mode: msg.mode,
+    modeLabel: msg.modeLabel,
+    minHumans: msg.minHumans,
+    maxHumans: msg.maxHumans,
+    bots: msg.bots,
+    players: msg.players,
+    phase: msg.phase,
+    secondsLeft: msg.secondsLeft,
+  };
+}
+
 function handleServer(msg) {
   switch (msg.type) {
     case "joined":
-      store.setState({
-        screen: "lobby",
-        me: { id: msg.id },
-        players: msg.players,
-        phase: msg.phase,
-        secondsLeft: msg.secondsLeft,
-        error: null,
-      });
+      store.setState(
+        Object.assign(lobbyPatch(msg), {
+          screen: "lobby",
+          me: { id: msg.id },
+          error: null,
+        })
+      );
       break;
 
     case "lobby":
-      store.setState({
-        players: msg.players,
-        phase: msg.phase,
-        secondsLeft: msg.secondsLeft,
-      });
+      store.setState((s) =>
+        Object.assign(lobbyPatch(msg), {
+          screen: s.screen === "gameover" ? "lobby" : s.screen,
+          game: s.screen === "gameover" ? null : s.game,
+        })
+      );
       break;
 
     case "chat":
@@ -56,17 +81,26 @@ function handleServer(msg) {
       store.setState({
         screen: "game",
         winner: null,
+        winnerTeam: null,
+        rematchReady: 0,
+        rematchTotal: 0,
+        rematchSent: false,
+        confirmLeave: false,
         game: {
           width: msg.width,
           height: msg.height,
-          tiles: msg.tiles,
+          mode: msg.mode,
+          teamMode: msg.teamMode,
+          teams: msg.teams,
+          spiritCooldown: msg.spiritCooldown,
           players: msg.players,
         },
       });
       if (document.activeElement && document.activeElement.blur) {
         document.activeElement.blur();
       }
-      entities.init(msg);
+      entities.init(msg, store.getState().me && store.getState().me.id);
+      tiles.build(msg); // draw walls/blocks imperatively (outside the framework diff)
       break;
 
     case "player_move":
@@ -77,8 +111,13 @@ function handleServer(msg) {
       entities.onBomb(msg);
       break;
 
+    case "bomb_move":
+      entities.onBombMove(msg);
+      break;
+
     case "explosion":
       entities.onExplosion(msg);
+      tiles.destroy(msg.destroyed); // remove only the blocks this blast destroyed
       applyExplosion(msg);
       break;
 
@@ -89,12 +128,42 @@ function handleServer(msg) {
 
     case "player_dead":
       entities.onDead(msg);
-      patchPlayer(msg.id, { alive: false });
+      patchPlayer(msg.id, { alive: false, ghost: !!msg.ghost });
       break;
 
     case "game_over":
       entities.stop();
-      store.setState({ screen: "gameover", winner: msg.winner });
+      store.setState({
+        screen: "gameover",
+        winner: msg.winner,
+        winnerTeam: msg.team,
+        confirmLeave: false,
+      });
+      break;
+
+    case "rematch_state":
+      store.setState({ rematchReady: msg.ready, rematchTotal: msg.total });
+      break;
+
+    case "left":
+      entities.stop();
+      store.setState({
+        screen: "nickname",
+        me: null,
+        players: [],
+        phase: "waiting",
+        secondsLeft: null,
+        bots: 0,
+        chat: [],
+        game: null,
+        winner: null,
+        winnerTeam: null,
+        rematchReady: 0,
+        rematchTotal: 0,
+        rematchSent: false,
+        confirmLeave: false,
+        error: null,
+      });
       break;
 
     case "error":
@@ -104,18 +173,16 @@ function handleServer(msg) {
 }
 
 function applyExplosion(msg) {
+  // Destroyed blocks are removed imperatively (tiles.destroy) — a block-only blast
+  // needs no framework re-render at all. Only a player hit changes the HUD.
+  if (!msg.hits.length) return;
   store.setState((s) => {
     if (!s.game) return {};
-    const tiles = s.game.tiles.map((row) => row.slice());
-    for (const { x, y } of msg.destroyed) tiles[y][x] = 0;
-    let players = s.game.players;
-    if (msg.hits.length) {
-      players = players.map((p) => {
-        const hit = msg.hits.find((hh) => hh.id === p.id);
-        return hit ? { ...p, lives: hit.lives, alive: hit.alive } : p;
-      });
-    }
-    return { game: { ...s.game, tiles, players } };
+    const players = s.game.players.map((p) => {
+      const hit = msg.hits.find((hh) => hh.id === p.id);
+      return hit ? { ...p, lives: hit.lives, alive: hit.alive, ghost: hit.ghost } : p;
+    });
+    return { game: { ...s.game, players } };
   });
 }
 
@@ -128,19 +195,35 @@ function patchPlayer(id, patch) {
 }
 
 const actions = {
+  pickMode(mode) {
+    store.setState({ mode, error: null });
+  },
   join(nickname) {
     nickname = (nickname || "").trim();
     if (!nickname) {
       store.setState({ error: "Please enter a nickname." });
       return;
     }
+    const mode = store.getState().mode;
     store.setState({ nickname, error: null });
-    net.send({ type: "join", nickname });
+    net.send({ type: "join", nickname, mode });
   },
   sendChat(text) {
     text = (text || "").trim();
     if (!text) return;
     net.send({ type: "chat", text });
+  },
+  armLeave(on) {
+    store.setState({ confirmLeave: !!on });
+  },
+  leaveMatch() {
+    store.setState({ confirmLeave: false });
+    net.send({ type: "leave" });
+  },
+  rematch() {
+    if (store.getState().rematchSent) return;
+    store.setState({ rematchSent: true });
+    net.send({ type: "rematch" });
   },
 };
 
@@ -160,7 +243,7 @@ function view(state) {
     case "game":
       return gameScreen(state, actions);
     case "gameover":
-      return gameoverScreen(state);
+      return gameoverScreen(state, actions);
     case "nickname":
     default:
       return nicknameScreen(state, actions);
@@ -175,3 +258,10 @@ function scrollChatSoon() {
 }
 
 createApp({ root: document.getElementById("app"), view, store });
+
+// Keep the whole map on screen: re-fit the board on resize and on every game
+// re-render (HUD height changes in team modes, ghost bar appearing, etc.).
+initFit();
+store.subscribe(() => {
+  if (store.getState().screen === "game") scheduleFit();
+});
