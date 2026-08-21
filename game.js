@@ -323,6 +323,8 @@ function completeMove(game, p) {
 }
 
 function pickup(game, p) {
+  if (!p.alive || p.ghost || p.gone) return;
+
   const i = game.powerups.findIndex((pu) => pu.x === p.cellX && pu.y === p.cellY);
   if (i === -1) return;
   const pu = game.powerups[i];
@@ -529,7 +531,7 @@ function explode(game, bomb) {
   const now = Date.now();
   const hits = [];
   for (const p of game.players) {
-    if (!p.alive) continue;
+    if (!p.alive || p.ghost || p.gone) continue;
     const cell = flame.get(p.cellX + "," + p.cellY);
     if (!cell) continue;
     if (now < p.invulnUntil) continue;
