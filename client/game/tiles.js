@@ -1,16 +1,8 @@
-// tiles.js — the static map (indestructible walls + destructible blocks) drawn
-// imperatively, OUTSIDE the framework's diff, exactly like the #entities sprite
-// layer. Because the framework never touches these nodes, a destroyed block is a
-// single removeChild — we don't rebuild or re-diff the whole grid, so a big
-// explosion (which can clear many blocks at once) never causes a frame drop.
-
 const WALL = 1;
 const BLOCK = 2;
 
-const blockEls = new Map(); // "x,y" -> element (only destructible blocks are tracked)
+const blockEls = new Map();
 
-// Fill #board from a game_start payload. #entities is a sibling, so clearing
-// #board here never disturbs the sprite layer.
 export function build(msg) {
   const board = document.getElementById("board");
   if (!board) return;
@@ -33,7 +25,6 @@ export function build(msg) {
   board.appendChild(frag);
 }
 
-// Remove exactly the blocks a blast destroyed — no grid re-diff.
 export function destroy(cells) {
   if (!cells) return;
   for (const { x, y } of cells) {

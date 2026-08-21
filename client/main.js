@@ -100,7 +100,7 @@ function handleServer(msg) {
         document.activeElement.blur();
       }
       entities.init(msg, store.getState().me && store.getState().me.id);
-      tiles.build(msg); // draw walls/blocks imperatively (outside the framework diff)
+      tiles.build(msg);
       break;
 
     case "player_move":
@@ -117,7 +117,7 @@ function handleServer(msg) {
 
     case "explosion":
       entities.onExplosion(msg);
-      tiles.destroy(msg.destroyed); // remove only the blocks this blast destroyed
+      tiles.destroy(msg.destroyed);
       applyExplosion(msg);
       break;
 
@@ -173,8 +173,6 @@ function handleServer(msg) {
 }
 
 function applyExplosion(msg) {
-  // Destroyed blocks are removed imperatively (tiles.destroy) — a block-only blast
-  // needs no framework re-render at all. Only a player hit changes the HUD.
   if (!msg.hits.length) return;
   store.setState((s) => {
     if (!s.game) return {};
@@ -259,8 +257,6 @@ function scrollChatSoon() {
 
 createApp({ root: document.getElementById("app"), view, store });
 
-// Keep the whole map on screen: re-fit the board on resize and on every game
-// re-render (HUD height changes in team modes, ghost bar appearing, etc.).
 initFit();
 store.subscribe(() => {
   if (store.getState().screen === "game") scheduleFit();

@@ -25,8 +25,6 @@ export function gameScreen(state, actions) {
           style: { width: g.width * TILE + "px", height: g.height * TILE + "px" },
         },
         [
-          // #board is filled imperatively by tiles.js — walls/blocks live outside
-          // the framework diff, so destroying a block never re-diffs the grid.
           h("div", {
             class: "board",
             id: "board",
