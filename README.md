@@ -1,6 +1,6 @@
 # bomberman-dom
 
-A multiplayer Bomberman game built with **[MiniFramework](../mini-framework)** (our own
+A multiplayer Bomberman game built with **MiniFramework** (our own
 from-scratch JS framework — no React/Vue/canvas/WebGL) and **WebSockets**. All five bonus
 features from the subject are implemented — see [Bonus features](#bonus-features).
 
