@@ -3,9 +3,7 @@ const bot = require("./bot.js");
 const WIDTH = 15;
 const HEIGHT = 13;
 
-const EMPTY = 0;
-const WALL = 1;
-const BLOCK = 2;
+const { EMPTY, WALL, BLOCK } = require("./tile-types.js");
 
 const LIVES = 3;
 const MAX_LIVES = 5;
@@ -463,6 +461,7 @@ function explode(game, bomb) {
   const explodedIds = [];
   const flame = new Map();
   const destroyed = [];
+  const destroyedSeen = new Set();
   const queue = [bomb];
   const seen = new Set([bomb.id]);
 
@@ -510,7 +509,11 @@ function explode(game, bomb) {
 
         if (t === BLOCK) {
           addFlame(x, y, b.ownerId);
-          destroyed.push({ x, y });
+          const dkey = x + "," + y;
+          if (!destroyedSeen.has(dkey)) {
+            destroyedSeen.add(dkey);
+            destroyed.push({ x, y });
+          }
           break;
         }
         addFlame(x, y, b.ownerId);
@@ -532,7 +535,9 @@ function explode(game, bomb) {
   const hits = [];
   for (const p of game.players) {
     if (!p.alive || p.ghost || p.gone) continue;
-    const cell = flame.get(p.cellX + "," + p.cellY);
+    const cell =
+      flame.get(p.cellX + "," + p.cellY) ||
+      (p.moving ? flame.get(p.nextX + "," + p.nextY) : undefined);
     if (!cell) continue;
     if (now < p.invulnUntil) continue;
 
@@ -669,5 +674,4 @@ module.exports = {
   placeBomb,
   killPlayer,
   stopGame,
-  TEAMS,
 };

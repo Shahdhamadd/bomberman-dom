@@ -11,7 +11,6 @@ import { initFit, scheduleFit } from "./game/fit.js";
 
 const store = createStore({
   screen: "nickname",
-  nickname: "",
   mode: "versus",
   modeLabel: "Versus",
   minHumans: 2,
@@ -23,6 +22,7 @@ const store = createStore({
   secondsLeft: null,
   chat: [],
   error: null,
+  connected: true,
   game: null,
   winner: null,
   winnerTeam: null,
@@ -33,9 +33,9 @@ const store = createStore({
 });
 
 const net = connect({
-  url: `ws://${location.host}`,
+  url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`,
   onMessage: handleServer,
-  onClose: () => store.setState({ error: "Disconnected from the server." }),
+  onClose: () => store.setState({ connected: false, confirmLeave: false }),
 });
 
 function lobbyPatch(msg) {
@@ -192,21 +192,27 @@ function patchPlayer(id, patch) {
   });
 }
 
+function live() {
+  return store.getState().connected;
+}
+
 const actions = {
   pickMode(mode) {
     store.setState({ mode, error: null });
   },
   join(nickname) {
+    if (!live()) return;
     nickname = (nickname || "").trim();
     if (!nickname) {
       store.setState({ error: "Please enter a nickname." });
       return;
     }
     const mode = store.getState().mode;
-    store.setState({ nickname, error: null });
+    store.setState({ error: null });
     net.send({ type: "join", nickname, mode });
   },
   sendChat(text) {
+    if (!live()) return;
     text = (text || "").trim();
     if (!text) return;
     net.send({ type: "chat", text });
@@ -215,10 +221,12 @@ const actions = {
     store.setState({ confirmLeave: !!on });
   },
   leaveMatch() {
+    if (!live()) return;
     store.setState({ confirmLeave: false });
     net.send({ type: "leave" });
   },
   rematch() {
+    if (!live()) return;
     if (store.getState().rematchSent) return;
     store.setState({ rematchSent: true });
     net.send({ type: "rematch" });
@@ -234,7 +242,7 @@ initInput({
   },
 });
 
-function view(state) {
+function screenFor(state) {
   switch (state.screen) {
     case "lobby":
       return lobbyScreen(state, actions);
@@ -246,6 +254,26 @@ function view(state) {
     default:
       return nicknameScreen(state, actions);
   }
+}
+
+function connectionBanner() {
+  return h("div", { class: "conn-banner", key: "conn", role: "alert" }, [
+    h("span", { class: "conn-text" }, "Disconnected from the server."),
+    h(
+      "button",
+      { class: "conn-reload", type: "button", onClick: () => location.reload() },
+      "Reload"
+    ),
+  ]);
+}
+
+function view(state) {
+  const screen = screenFor(state);
+  screen.attrs.key = "screen";
+  return h("div", { class: "app-shell" + (state.connected ? "" : " offline") }, [
+    state.connected ? null : connectionBanner(),
+    screen,
+  ]);
 }
 
 function scrollChatSoon() {

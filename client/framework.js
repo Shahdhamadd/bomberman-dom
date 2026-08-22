@@ -7,5 +7,4 @@ if (!MF) {
 
 export const h = MF.h;
 export const createStore = MF.createStore;
-export const createRouter = MF.createRouter;
 export const createApp = MF.createApp;

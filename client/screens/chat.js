@@ -33,11 +33,16 @@ export function chatPanel(state, actions) {
         h("input", {
           id: "chat-input",
           class: "chat-input",
-          placeholder: "Type a message…",
+          placeholder: state.connected ? "Type a message…" : "Disconnected",
           autocomplete: "off",
           maxlength: "300",
+          disabled: !state.connected,
         }),
-        h("button", { class: "chat-send", type: "submit" }, "Send"),
+        h(
+          "button",
+          { class: "chat-send", type: "submit", disabled: !state.connected },
+          "Send"
+        ),
       ]
     ),
   ]);

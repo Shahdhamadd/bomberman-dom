@@ -33,7 +33,7 @@ export function nicknameScreen(state, actions) {
             if (e.key === "Enter") submit();
           },
         }),
-        h("button", { class: "btn", onClick: submit }, "Join"),
+        h("button", { class: "btn", disabled: !state.connected, onClick: submit }, "Join"),
       ]),
     ]),
   ]);

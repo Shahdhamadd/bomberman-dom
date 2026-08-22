@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "description": "Multiplayer Bomberman built with MiniFramework + WebSockets.",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "ws": "^8.21.2"

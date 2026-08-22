@@ -19,7 +19,7 @@ function setVars(scale) {
   }
 }
 
-export function fitBoard() {
+function fitBoard() {
   const wrap = document.querySelector(".board-wrap");
   if (!wrap || !wrap.parentElement) return;
 

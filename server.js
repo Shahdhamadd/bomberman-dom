@@ -16,25 +16,56 @@ const MIME = {
   ".ico": "image/x-icon",
 };
 
+const PUBLIC = new Set(["index.html", "client", "framework"]);
+
+function servable(filePath) {
+  const rel = path.relative(ROOT, filePath);
+  if (!rel || rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) {
+    return false;
+  }
+  return PUBLIC.has(rel.split(path.sep)[0]);
+}
+
+function fail(res, code, message) {
+  res.writeHead(code, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "X-Content-Type-Options": "nosniff",
+  });
+  res.end(message);
+}
+
 const server = http.createServer((req, res) => {
-  let urlPath = decodeURIComponent(req.url.split("?")[0]);
+  let urlPath;
+  try {
+    urlPath = decodeURIComponent(req.url.split("?")[0]);
+  } catch {
+    fail(res, 400, "Bad request");
+    return;
+  }
   if (urlPath.endsWith("/")) urlPath += "index.html";
 
-  const filePath = path.join(ROOT, urlPath);
-  if (!filePath.startsWith(ROOT)) {
-    res.writeHead(403);
-    res.end("Forbidden");
+  const filePath = path.resolve(ROOT, "." + urlPath);
+  if (!servable(filePath)) {
+    fail(res, 403, "Forbidden");
     return;
   }
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
-      res.writeHead(404);
-      res.end("Not found: " + urlPath);
+      if (err.code === "ENOENT" || err.code === "EISDIR") {
+        fail(res, 404, "Not found");
+      } else {
+        console.error("read failed for", filePath, "-", err.code);
+        fail(res, 500, "Internal server error");
+      }
       return;
     }
     const type = MIME[path.extname(filePath)] || "application/octet-stream";
-    res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-cache" });
+    res.writeHead(200, {
+      "Content-Type": type,
+      "Cache-Control": "no-cache",
+      "X-Content-Type-Options": "nosniff",
+    });
     res.end(data);
   });
 });
@@ -51,6 +82,9 @@ const MODES = {
 };
 
 const BOT_NAMES = ["Bombot", "Sparky", "Fuse", "Blastr"];
+
+const CHAT_BURST = 5;
+const CHAT_REFILL_MS = 700;
 
 let nextPlayerId = 1;
 const rooms = [];
@@ -76,7 +110,7 @@ function openRoom(mode) {
       r.mode === mode &&
       !r.started &&
       r.phase !== "countdown" &&
-      r.players.length < MODES[mode].maxHumans
+      connectedCount(r) < MODES[mode].maxHumans
   );
   return room || createRoom(mode);
 }
@@ -216,7 +250,8 @@ function startGame(room) {
   room.phase = "playing";
   room.secondsLeft = null;
 
-  const game = gameLogic.createGame(buildSeats(room), room.mode);
+  const seatList = buildSeats(room);
+  const game = gameLogic.createGame(seatList, room.mode);
   game.emit = (msg) => {
     broadcast(room, msg);
     if (msg.type === "game_over") checkRematch(room);
@@ -230,6 +265,7 @@ function returnToLobby(room) {
   clearTimer(room);
   if (room.game) gameLogic.stopGame(room.game);
   room.game = null;
+  room.players = room.players.filter((p) => p.connected);
   room.started = false;
   room.phase = "waiting";
   room.secondsLeft = null;
@@ -253,9 +289,16 @@ function checkRematch(room) {
 
 const wss = new WebSocketServer({ server });
 
+wss.on("error", (err) => console.error("websocket server error:", err.message));
+
 wss.on("connection", (ws) => {
   ws.player = null;
   ws.room = null;
+
+  ws.on("error", (err) => {
+    console.error("socket error:", err.message);
+    ws.close();
+  });
 
   ws.on("message", (raw) => {
     let msg;
@@ -266,12 +309,16 @@ wss.on("connection", (ws) => {
     }
     if (!msg || typeof msg.type !== "string") return;
 
-    if (msg.type === "join") handleJoin(ws, msg);
-    else if (msg.type === "chat") handleChat(ws, msg);
-    else if (msg.type === "input") handleInput(ws, msg);
-    else if (msg.type === "bomb") handleBomb(ws);
-    else if (msg.type === "leave") handleQuit(ws);
-    else if (msg.type === "rematch") handleRematch(ws);
+    try {
+      if (msg.type === "join") handleJoin(ws, msg);
+      else if (msg.type === "chat") handleChat(ws, msg);
+      else if (msg.type === "input") handleInput(ws, msg);
+      else if (msg.type === "bomb") handleBomb(ws);
+      else if (msg.type === "leave") handleQuit(ws);
+      else if (msg.type === "rematch") handleRematch(ws);
+    } catch (err) {
+      console.error("bad message:", msg.type, "-", err && err.message);
+    }
   });
 
   ws.on("close", () => handleLeave(ws));
@@ -279,15 +326,25 @@ wss.on("connection", (ws) => {
 
 function handleJoin(ws, msg) {
   if (ws.player) return;
-  const nickname = String(msg.nickname || "").trim().slice(0, 16);
+  const nickname =
+    typeof msg.nickname === "string" ? msg.nickname.trim().slice(0, 16) : "";
   if (!nickname) {
     send(ws, { type: "error", message: "Please enter a nickname." });
     return;
   }
 
-  const mode = MODES[msg.mode] ? msg.mode : "versus";
+  const mode =
+    typeof msg.mode === "string" && Object.hasOwn(MODES, msg.mode) ? msg.mode : "versus";
   const room = openRoom(mode);
-  const player = { id: nextPlayerId++, nickname, ws, connected: true, rematch: false };
+  const player = {
+    id: nextPlayerId++,
+    nickname,
+    ws,
+    connected: true,
+    rematch: false,
+    chatTokens: CHAT_BURST,
+    chatStamp: Date.now(),
+  };
   room.players.push(player);
   ws.player = player;
   ws.room = room;
@@ -301,8 +358,9 @@ function handleChat(ws, msg) {
   const player = ws.player;
   const room = ws.room;
   if (!player || !room) return;
-  const text = String(msg.text || "").trim().slice(0, 300);
+  const text = typeof msg.text === "string" ? msg.text.trim().slice(0, 300) : "";
   if (!text) return;
+  if (!allowChat(player)) return;
   broadcast(room, {
     type: "chat",
     from: player.id,
@@ -310,6 +368,19 @@ function handleChat(ws, msg) {
     text,
     ts: Date.now(),
   });
+}
+
+function allowChat(player) {
+  const now = Date.now();
+  const elapsed = now - (player.chatStamp || 0);
+  const tokens = Math.min(CHAT_BURST, player.chatTokens + elapsed / CHAT_REFILL_MS);
+  player.chatStamp = now;
+  if (tokens < 1) {
+    player.chatTokens = tokens;
+    return false;
+  }
+  player.chatTokens = tokens - 1;
+  return true;
 }
 
 function handleInput(ws, msg) {
@@ -385,6 +456,23 @@ function handleLeave(ws) {
 
   releaseRoom(room);
 }
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`port ${PORT} is already in use — set PORT to something else`);
+  } else {
+    console.error("http server error:", err.message);
+  }
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("unhandled rejection:", err && err.message);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("uncaught exception (server kept alive):", err && err.stack);
+});
 
 server.listen(PORT, () => {
   console.log(`bomberman-dom running at http://localhost:${PORT}`);

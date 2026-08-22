@@ -1,5 +1,4 @@
-const WALL = 1;
-const BLOCK = 2;
+import { WALL, BLOCK } from "./constants.js";
 
 const blockEls = new Map();
 

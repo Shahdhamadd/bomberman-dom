@@ -1,6 +1,7 @@
-export function connect({ url, onMessage, onOpen, onClose }) {
+export function connect({ url, onMessage, onClose }) {
   let ws;
   let queue = [];
+  let closed = false;
 
   function open() {
     ws = new WebSocket(url);
@@ -8,7 +9,6 @@ export function connect({ url, onMessage, onOpen, onClose }) {
     ws.onopen = () => {
       queue.forEach((m) => ws.send(m));
       queue = [];
-      if (onOpen) onOpen();
     };
 
     ws.onmessage = (e) => {
@@ -22,9 +22,13 @@ export function connect({ url, onMessage, onOpen, onClose }) {
     };
 
     ws.onclose = () => {
+      closed = true;
+      queue = [];
       if (onClose) onClose();
     };
 
+    // A socket error is always followed by a close, so the disconnect is handled
+    // there. This handler exists only to stop the error reaching window.onerror.
     ws.onerror = () => {};
   }
 
@@ -32,6 +36,7 @@ export function connect({ url, onMessage, onOpen, onClose }) {
 
   return {
     send(obj) {
+      if (closed) return;
       const msg = JSON.stringify(obj);
       if (ws && ws.readyState === WebSocket.OPEN) ws.send(msg);
       else queue.push(msg);

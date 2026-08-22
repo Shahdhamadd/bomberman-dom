@@ -12,7 +12,12 @@ export function leaveControl(state, actions, label) {
     return h("div", { class: "leave-wrap", key: "leave" }, [
       h(
         "button",
-        { class: "leave-btn", type: "button", onClick: tap(() => actions.armLeave(true)) },
+        {
+          class: "leave-btn",
+          type: "button",
+          disabled: !state.connected,
+          onClick: tap(() => actions.armLeave(true)),
+        },
         label || "Leave match"
       ),
     ]);

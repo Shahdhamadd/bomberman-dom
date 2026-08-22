@@ -33,6 +33,7 @@ export function gameoverScreen(state, actions) {
             class: "btn" + (state.rematchSent ? " waiting" : ""),
             key: "rematch",
             type: "button",
+            disabled: !state.connected,
             onClick: () => actions.rematch(),
           },
           rematchLabel(state)
@@ -43,6 +44,7 @@ export function gameoverScreen(state, actions) {
             class: "leave-btn",
             key: "leave",
             type: "button",
+            disabled: !state.connected,
             onClick: () => actions.leaveMatch(),
           },
           "Leave"

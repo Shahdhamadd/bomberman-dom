@@ -1,5 +1,4 @@
-const WALL = 1;
-const BLOCK = 2;
+const { WALL, BLOCK } = require("./tile-types.js");
 
 const DIRS = ["up", "down", "left", "right"];
 

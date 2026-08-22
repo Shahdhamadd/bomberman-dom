@@ -9,7 +9,10 @@ features from the subject are implemented — see [Bonus features](#bonus-featur
 ```bash
 npm install   # installs `ws` (the only dependency)
 npm start     # serves http://localhost:3000 + the WebSocket server
+npm test      # unit tests for the game rules (node --test, no extra deps)
 ```
+
+Requires **Node 20 or newer**.
 
 Open **http://localhost:3000**. Each tab is one player — open several to test multiplayer.
 
@@ -121,6 +124,8 @@ bomberman-dom/
 ├── server.js             # static file server + WebSocket lobby (modes, rooms, bot seats)
 ├── game.js               # authoritative game logic (map, movement, bombs, teams, ghosts, win)
 ├── bot.js                # AI: blast maps, escape search, target picking
+├── tile-types.js         # EMPTY/WALL/BLOCK, shared by game.js and bot.js
+├── test/                 # game-rule unit tests (node --test)
 ├── framework/            # vendored copy of MiniFramework (events, vdom, state, router, index)
 └── client/
     ├── framework.js      # bridges window.MiniFramework -> clean ES imports
@@ -131,6 +136,29 @@ bomberman-dom/
     └── game/             # constants, board (HUD/chat), tiles, fit, entities (rAF layer),
                           # sprites (inline SVG), input
 ```
+
+## Design notes
+
+**No reconnect.** A dropped connection removes you from the match for good — the server kills
+your character so the round can resolve, and the client shows a "Disconnected from the server"
+banner with a Reload button and disables everything that needs a live socket. This is a
+deliberate choice, not an oversight: rejoining mid-match would need seat reservation and state
+replay, which is out of scope here. Reload to start over.
+
+**Routing is intentionally unused.** MiniFramework ships a hash router, but screens are
+switched through a `screen` field in the store instead. A game has no meaningful URLs to
+deep-link to, so the Back button does nothing and a refresh returns to the nickname screen.
+The router stays vendored because it is part of the framework, not because the game needs it.
+
+**`tile-types.js` exists to break a require cycle.** `game.js` requires `bot.js`, and `bot.js`
+needs `WALL` and `BLOCK` to read the grid — importing them back from `game.js` would be
+circular. A five-line leaf module with no dependencies of its own is the way out, and that is
+all `tile-types.js` is.
+
+`client/game/constants.js` then repeats the same two numbers for the browser. That is
+duplication, and it is deliberate: with no build step, one file cannot be both a CommonJS
+module for the server and an ES module for the client. Two definitions is the floor without
+adding a bundler — the leaf module solves the cycle, not the duplication.
 
 ## WebSocket protocol (JSON messages)
 
@@ -177,5 +205,8 @@ Motion is **time-based, not frame-counted** — `advance()` interpolates with
 bots run on one 60 ms `setInterval` per game (`startLoop` in `game.js`), which also retries a
 blocked step so you keep walking when the wall ahead is blown open.
 
-**Measured:** a live 4-player match (1 human + 3 AI, continuous bombing) in Chrome — median
-frame time **8.3 ms**, average **117 fps**, FPS meter never below **60** over a 60-second run.
+**Measured:** a live 4-player match (1 human + 3 AI, continuous bombing) in Chrome on a
+**120 Hz** display — median frame time **8.3 ms**, average **117 fps**, FPS meter never below
+**60** over a 60-second run. The refresh rate matters: on a 60 Hz display the same run is
+capped at ~60 fps / ~16.7 ms per frame. The figure to compare across machines is the share of
+frames that miss the display's own budget, not the raw fps number.

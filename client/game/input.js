@@ -47,8 +47,7 @@ export function initInput({ send, isActive, isTyping }) {
   window.addEventListener("keyup", (e) => {
     const i = held.indexOf(e.code);
     if (i !== -1) held.splice(i, 1);
-    if (isActive() && !isTyping()) syncDir();
-    else lastDir = currentDir();
+    syncDir();
   });
 
   window.addEventListener("blur", () => {
