@@ -18,45 +18,94 @@ const MIME = {
 
 const PUBLIC = new Set(["index.html", "client", "framework"]);
 
-function servable(filePath) {
+const ERROR_PAGE = fs.readFileSync(path.join(ROOT, "error.html"), "utf8");
+
+const ERRORS = {
+  400: ["Bad request", "That address could not be understood."],
+  403: ["Forbidden", "That path is off the map. Nothing to see here."],
+  404: ["Page not found", "This route does not exist. Only the game lives here."],
+  405: ["Method not allowed", "This server only answers GET requests."],
+  500: ["Server error", "Something blew up on our side. Try again in a moment."],
+};
+
+function withinRoot(filePath) {
   const rel = path.relative(ROOT, filePath);
-  if (!rel || rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) {
-    return false;
-  }
-  return PUBLIC.has(rel.split(path.sep)[0]);
+  return !(!rel || rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel));
 }
 
-function fail(res, code, message) {
+function servable(filePath) {
+  if (!withinRoot(filePath)) return false;
+  return PUBLIC.has(path.relative(ROOT, filePath).split(path.sep)[0]);
+}
+
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, (c) => {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+
+function wantsHtml(req) {
+  return String(req.headers.accept || "").includes("text/html");
+}
+
+function errorPage(code, urlPath) {
+  const [title, message] = ERRORS[code] || ERRORS[500];
+  const fields = {
+    "{{CODE}}": String(code),
+    "{{TITLE}}": title,
+    "{{MESSAGE}}": message,
+    "{{PATH}}": urlPath ? escapeHtml(urlPath.slice(0, 120)) : "—",
+  };
+  return ERROR_PAGE.replace(/{{CODE}}|{{TITLE}}|{{MESSAGE}}|{{PATH}}/g, (m) => fields[m]);
+}
+
+function fail(req, res, code, urlPath) {
+  const [title, message] = ERRORS[code] || ERRORS[500];
+  const html = wantsHtml(req);
+  const body = html ? errorPage(code, urlPath) : code + " " + title + " — " + message;
   res.writeHead(code, {
-    "Content-Type": "text/plain; charset=utf-8",
+    "Content-Type": html ? MIME[".html"] : "text/plain; charset=utf-8",
+    "Content-Length": Buffer.byteLength(body),
+    "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
   });
-  res.end(message);
+  res.end(req.method === "HEAD" ? undefined : body);
 }
 
 const server = http.createServer((req, res) => {
+  const rawPath = req.url.split("?")[0];
   let urlPath;
   try {
-    urlPath = decodeURIComponent(req.url.split("?")[0]);
+    urlPath = decodeURIComponent(rawPath);
   } catch {
-    fail(res, 400, "Bad request");
+    fail(req, res, 400, rawPath);
     return;
   }
+
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    fail(req, res, 405, urlPath);
+    return;
+  }
+
   if (urlPath.endsWith("/")) urlPath += "index.html";
 
   const filePath = path.resolve(ROOT, "." + urlPath);
+  if (!withinRoot(filePath)) {
+    fail(req, res, 403, urlPath);
+    return;
+  }
   if (!servable(filePath)) {
-    fail(res, 403, "Forbidden");
+    fail(req, res, 404, urlPath);
     return;
   }
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
       if (err.code === "ENOENT" || err.code === "EISDIR") {
-        fail(res, 404, "Not found");
+        fail(req, res, 404, urlPath);
       } else {
         console.error("read failed for", filePath, "-", err.code);
-        fail(res, 500, "Internal server error");
+        fail(req, res, 500, urlPath);
       }
       return;
     }
