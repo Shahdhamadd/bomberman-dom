@@ -27,8 +27,6 @@ export function connect({ url, onMessage, onClose }) {
       if (onClose) onClose();
     };
 
-    // A socket error is always followed by a close, so the disconnect is handled
-    // there. This handler exists only to stop the error reaching window.onerror.
     ws.onerror = () => {};
   }
 

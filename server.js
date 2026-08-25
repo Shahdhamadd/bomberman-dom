@@ -64,7 +64,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {
       "Content-Type": type,
       "Cache-Control": "no-cache",
-      "X-Content-Type-Options": "nosniff", //xss defense
+      "X-Content-Type-Options": "nosniff",
     });
     res.end(data);
   });

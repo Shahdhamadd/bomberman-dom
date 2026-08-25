@@ -291,9 +291,6 @@ createApp({ root: document.getElementById("app"), view, store });
 
 initFit();
 
-// Refit only when the space around the board actually changes shape: entering a
-// match, the offline banner pushing the page down, or a window resize. Refitting
-// on every store update resized the map on every powerup, death and chat line.
 let fitKey = "";
 store.subscribe((s) => {
   const key =

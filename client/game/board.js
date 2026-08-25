@@ -10,14 +10,11 @@ export function gameScreen(state, actions) {
   return h("div", { class: "screen game" }, [
     h("div", { class: "game-main" }, [
       h("div", { class: "game-bar", key: "bar" }, [hud(state)]),
-      // Sits directly above the board rather than off in the top corner.
       h("div", { class: "bar-right", key: "tools" }, [
         controlsHint(),
         h("div", { class: "fps", id: "fps", key: "fps" }),
         leaveControl(state, actions),
       ]),
-      // The slot is the leftover space under the bar; the board is centred in it
-      // and scaled to fill it, so the whole map is always on screen.
       h("div", { class: "board-slot", key: "slot" }, [
         h(
           "div",
@@ -41,8 +38,6 @@ export function gameScreen(state, actions) {
       ]),
     ]),
     h("div", { class: "game-side" }, [
-      // Lives in the side panel so becoming (or stopping being) a ghost never
-      // pushes the board down and forces it to a new size mid-match.
       me && me.ghost && ghostBar(),
       h("h2", { class: "panel-title" }, "Chat"),
       chatPanel(state, actions),
@@ -116,10 +111,7 @@ function playerTitle(p, out) {
   return p.nickname;
 }
 
-// Each stat carries its own explanation, so the icons are not a guessing game.
 function stat(icon, value, cls, help) {
-  // No space before the number: bombs and range are uncapped, so a late-game
-  // chip has to hold two-digit values without the row spilling over.
   const text = value === "" ? icon : icon + value;
   return h("span", { class: cls ? "stat " + cls : "stat", title: help }, text);
 }

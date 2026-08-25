@@ -486,8 +486,6 @@ input[disabled] {
   overflow: hidden;
   align-items: stretch;
 }
-/* Small window: every row above and below the map gives back what it can, so
-   the map itself is not the only thing that shrinks. */
 @media (max-width: 700px) {
   .game {
     grid-template-columns: 1fr;
@@ -553,9 +551,6 @@ input[disabled] {
   min-height: 0;
 }
 
-/* Everything the bar does not use belongs to the board. The board itself is
-   taken out of flow and centred here, so its scale can never feed back into
-   the layout that decides that scale. */
 .board-slot {
   position: relative;
   flex: 1;
@@ -669,8 +664,6 @@ input[disabled] {
   gap: 10px;
 }
 .hud-team {
-  /* Sized to its own players, so a one-player team sits next to a three-player
-     one instead of each stretching to a full-width row of its own. */
   flex: 0 1 auto;
   min-width: 0;
   display: flex;
@@ -831,11 +824,7 @@ input[disabled] {
   gap: 10px;
 }
 
-/* Wide screens have width to spare but no extra height, and the map's shape is
-   fixed — so the stat bar moves into a left rail and the board takes the whole
-   column height instead of leaving margins either side of it. */
 @media (min-width: 1500px) {
-  /* Only here does the chat panel take the width the board could not use. */
   .game {
     grid-template-columns: minmax(0, 1fr) var(--side-col, 380px);
   }
