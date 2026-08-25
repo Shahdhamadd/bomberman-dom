@@ -64,7 +64,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {
       "Content-Type": type,
       "Cache-Control": "no-cache",
-      "X-Content-Type-Options": "nosniff",
+      "X-Content-Type-Options": "nosniff", //xss defense
     });
     res.end(data);
   });
@@ -77,7 +77,7 @@ const SEATS = 4;
 const MODES = {
   versus: { label: "Versus", minHumans: 2, maxHumans: 4, fill: false, teams: false, instant: false },
   teams: { label: "Teams", minHumans: 2, maxHumans: 4, fill: true, teams: true, instant: false },
-  coop: { label: "Co-op vs AI", minHumans: 2, maxHumans: 3, fill: true, teams: true, instant: false },
+  coop: { label: "Co-op vs AI", minHumans: 1, maxHumans: 3, fill: true, teams: true, instant: false },
   solo: { label: "Solo vs AI", minHumans: 1, maxHumans: 1, fill: true, teams: true, instant: true },
 };
 
@@ -120,6 +120,20 @@ function teamForSeat(room, seat) {
   return room.mode === "teams" ? seat % 2 : 0;
 }
 
+function botTeam(room, seat, humans) {
+  if (room.mode === "teams") return seat % 2;
+  if (room.mode === "coop" && humans < 2 && seat === humans) return 0;
+  return 1;
+}
+
+function botTeams(room) {
+  if (!MODES[room.mode].fill) return [];
+  const humans = connectedCount(room);
+  const teams = [];
+  for (let i = humans; i < SEATS; i++) teams.push(botTeam(room, i, humans));
+  return teams;
+}
+
 function buildSeats(room) {
   const cfg = MODES[room.mode];
   const humans = room.players.filter((p) => p.connected);
@@ -137,7 +151,7 @@ function buildSeats(room) {
       id: -(i + 1),
       nickname: BOT_NAMES[i % BOT_NAMES.length],
       bot: true,
-      team: room.mode === "teams" ? i % 2 : 1,
+      team: botTeam(room, i, humans.length),
     });
   }
   return seats;
@@ -162,14 +176,17 @@ function roster(room) {
 
 function lobbyState(room) {
   const cfg = MODES[room.mode];
-  const humans = connectedCount(room);
+  const bots = botTeams(room);
+  const allies = room.mode === "coop" ? bots.filter((t) => t === 0).length : 0;
   return {
     type: "lobby",
     mode: room.mode,
     modeLabel: cfg.label,
     maxHumans: cfg.maxHumans,
     minHumans: cfg.minHumans,
-    bots: cfg.fill ? Math.max(0, SEATS - humans) : 0,
+    bots: bots.length,
+    botAllies: allies,
+    botEnemies: bots.length - allies,
     phase: room.phase,
     secondsLeft: room.secondsLeft,
     players: roster(room),

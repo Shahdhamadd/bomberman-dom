@@ -3,7 +3,7 @@ import { h } from "../framework.js";
 const MODES = [
   { id: "versus", icon: "⚔️", name: "Versus", blurb: "2–4 players, free-for-all" },
   { id: "teams", icon: "🛡️", name: "Teams", blurb: "2 v 2 — AI fills empty seats" },
-  { id: "coop", icon: "🤝", name: "Co-op", blurb: "Team up against the AI" },
+  { id: "coop", icon: "🤝", name: "Co-op", blurb: "Team up vs AI — solo? you get an AI ally" },
   { id: "solo", icon: "🤖", name: "Solo", blurb: "You vs 3 AI — starts now" },
 ];
 

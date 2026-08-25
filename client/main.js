@@ -16,6 +16,8 @@ const store = createStore({
   minHumans: 2,
   maxHumans: 4,
   bots: 0,
+  botAllies: 0,
+  botEnemies: 0,
   me: null,
   players: [],
   phase: "waiting",
@@ -45,6 +47,8 @@ function lobbyPatch(msg) {
     minHumans: msg.minHumans,
     maxHumans: msg.maxHumans,
     bots: msg.bots,
+    botAllies: msg.botAllies,
+    botEnemies: msg.botEnemies,
     players: msg.players,
     phase: msg.phase,
     secondsLeft: msg.secondsLeft,
@@ -286,6 +290,17 @@ function scrollChatSoon() {
 createApp({ root: document.getElementById("app"), view, store });
 
 initFit();
-store.subscribe(() => {
-  if (store.getState().screen === "game") scheduleFit();
+
+// Refit only when the space around the board actually changes shape: entering a
+// match, the offline banner pushing the page down, or a window resize. Refitting
+// on every store update resized the map on every powerup, death and chat line.
+let fitKey = "";
+store.subscribe((s) => {
+  const key =
+    s.screen === "game" && s.game
+      ? s.connected + "|" + s.game.players.length + "|" + s.game.teamMode
+      : "";
+  if (key === fitKey) return;
+  fitKey = key;
+  if (key) scheduleFit();
 });

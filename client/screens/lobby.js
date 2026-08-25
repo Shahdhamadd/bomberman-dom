@@ -46,14 +46,17 @@ function statusLine(state) {
 }
 
 function botLine(state) {
-  if (!state.bots) return null;
-  const n = state.bots;
+  const total = state.bots;
+  if (!total) return null;
+  const allies = state.botAllies || 0;
+  const enemies = state.botEnemies == null ? total : state.botEnemies;
+  const parts = [];
+  if (allies) parts.push(`${allies} AI ${allies === 1 ? "ally" : "allies"} on your team`);
+  if (enemies) parts.push(`${enemies} AI ${enemies === 1 ? "enemy" : "enemies"}`);
   return h(
     "div",
     { class: "bot-line", key: "bots" },
-    `🤖 ${n} AI ${n === 1 ? "enemy" : "enemies"} will fill the empty ${
-      n === 1 ? "seat" : "seats"
-    }.`
+    `🤖 ${parts.join(" and ")} will fill the empty ${total === 1 ? "seat" : "seats"}.`
   );
 }
 
