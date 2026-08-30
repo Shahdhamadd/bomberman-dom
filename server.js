@@ -175,9 +175,16 @@ function botTeam(room, seat, humans) {
   return 1;
 }
 
+function seatOf(room, player) {
+  return room.players.filter((p) => p.connected).indexOf(player);
+}
+
 function botTeams(room) {
-  if (!MODES[room.mode].fill) return [];
-  const humans = connectedCount(room);
+  const cfg = MODES[room.mode];
+  if (!cfg.fill) return [];
+  // Project the smallest lineup that can actually start: a mode needing two humans
+  // never runs with one, so never promise the bots that seat count alone implies.
+  const humans = Math.max(connectedCount(room), cfg.minHumans);
   const teams = [];
   for (let i = humans; i < SEATS; i++) teams.push(botTeam(room, i, humans));
   return teams;
@@ -223,10 +230,14 @@ function roster(room) {
     .map((p, i) => ({ id: p.id, nickname: p.nickname, team: teamForSeat(room, i) }));
 }
 
-function lobbyState(room) {
+function lobbyState(room, viewer) {
   const cfg = MODES[room.mode];
   const bots = botTeams(room);
-  const allies = room.mode === "coop" ? bots.filter((t) => t === 0).length : 0;
+  // Allies are relative to the viewer: in teams mode humans sit on both sides,
+  // so one bot is an ally to half the room and an enemy to the other half.
+  const seat = viewer ? seatOf(room, viewer) : -1;
+  const myTeam = seat >= 0 ? teamForSeat(room, seat) : null;
+  const allies = myTeam == null ? 0 : bots.filter((t) => t === myTeam).length;
   return {
     type: "lobby",
     mode: room.mode,
@@ -243,7 +254,9 @@ function lobbyState(room) {
 }
 
 function broadcastLobby(room) {
-  broadcast(room, lobbyState(room));
+  for (const p of room.players) {
+    if (p.connected) send(p.ws, lobbyState(room, p));
+  }
 }
 
 function clearTimer(room) {
@@ -415,7 +428,7 @@ function handleJoin(ws, msg) {
   ws.player = player;
   ws.room = room;
 
-  send(ws, Object.assign(lobbyState(room), { type: "joined", id: player.id }));
+  send(ws, Object.assign(lobbyState(room, player), { type: "joined", id: player.id }));
   broadcastLobby(room);
   evaluate(room);
 }
