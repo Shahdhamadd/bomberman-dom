@@ -73,14 +73,19 @@ The last two are bonus power-ups and are deliberately rarer.
 
 Pick a mode on the nickname screen; each mode has its own waiting room.
 
-| Mode          | Players                   | Teams         | Start              |
-| ------------- | ------------------------- | ------------- | ------------------ |
-| ⚔️ **Versus** | 2–4 humans                | free-for-all  | normal 20 s + 10 s |
-| 🛡️ **Teams**  | 2–4 humans, AI fills to 4 | 2 v 2         | normal 20 s + 10 s |
-| 🤝 **Co-op**  | 2–3 humans, AI fills to 4 | humans vs AI  | normal 20 s + 10 s |
-| 🤖 **Solo**   | 1 human + 3 AI            | you vs the AI | starts immediately |
+| Mode          | Players                   | Teams                   | Start              |
+| ------------- | ------------------------- | ----------------------- | ------------------ |
+| ⚔️ **Versus** | 2–4 humans                | free-for-all            | normal 20 s + 10 s |
+| 🛡️ **Teams**  | 2–4 humans, AI fills to 4 | 2 v 2, AI on both sides | normal 20 s + 10 s |
+| 🤝 **Co-op**  | 1–3 humans, AI fills to 4 | humans vs AI            | normal 20 s + 10 s |
+| 🤖 **Solo**   | 1 human + 3 AI            | you vs 3 AI             | starts immediately |
 
-### 1. Solo and Co-op vs AI
+Only **Solo** guarantees who the bots fight for. **Teams** fills seats alternately, so a bot
+can land on your side — with two humans, each team is one human and one bot. **Co-op** gives a
+lone human one AI ally against two AI; with two or three humans every bot is an opponent. The
+lobby works this out per player, so each of you sees the split for *your* own team.
+
+### 1. AI players (Solo, Co-op, Teams)
 
 Bots (`bot.js`) run on the server and play by the same rules — same stats, same power-ups,
 and they can be blown up. Each bot re-plans every 120 ms:
@@ -170,7 +175,7 @@ adding a bundler — the leaf module solves the cycle, not the duplication.
 | type            | fields                                                                                   |
 | --------------- | ---------------------------------------------------------------------------------------- |
 | `joined`        | `id` + everything in `lobby`                                                              |
-| `lobby`         | `mode`, `modeLabel`, `minHumans`, `maxHumans`, `bots`, `phase`, `secondsLeft`, `players`  |
+| `lobby`         | `mode`, `modeLabel`, `minHumans`, `maxHumans`, `bots`, `botAllies`, `botEnemies`, `phase`, `secondsLeft`, `players` |
 | `chat`          | `from`, `nickname`, `text`, `ts`                                                          |
 | `game_start`    | `width`, `height`, `tiles`, `mode`, `teamMode`, `teams`, `spiritCooldown`, `players`      |
 | `player_move`   | `id`, `fromX/Y`, `toX/Y`, `duration`                                                      |
@@ -187,6 +192,11 @@ adding a bundler — the leaf module solves the cycle, not the duplication.
 Each entry in `explosion.hits` is `{ id, lives, alive, ghost, invulnMs, spiritCooldown }`, and
 `explosion.powerups` carries both block drops and the power-up a dying player leaves behind.
 Players in `game_start` include `team`, `bot`, `ghost` and `canKick`.
+
+`lobby` is the one message built per recipient rather than broadcast: `botAllies` and
+`botEnemies` are counted against the receiving player's own team. Its `bots` count projects
+the smallest lineup that can actually start, so a mode needing two humans never advertises
+three bots while only one player is waiting.
 
 ## The 60fps design
 
