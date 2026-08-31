@@ -127,7 +127,7 @@ const MODES = {
   versus: { label: "Versus", minHumans: 2, maxHumans: 4, fill: false, teams: false, instant: false },
   teams: { label: "Teams", minHumans: 2, maxHumans: 4, fill: true, teams: true, instant: false },
   coop: { label: "Co-op vs AI", minHumans: 1, maxHumans: 3, fill: true, teams: true, instant: false },
-  solo: { label: "Solo vs AI", minHumans: 1, maxHumans: 1, fill: true, teams: true, instant: true },
+  solo: { label: "Solo vs AI", minHumans: 1, maxHumans: 1, fill: true, teams: false, instant: true },
 };
 
 const BOT_NAMES = ["Bombot", "Sparky", "Fuse", "Blastr"];
@@ -170,6 +170,7 @@ function teamForSeat(room, seat) {
 }
 
 function botTeam(room, seat, humans) {
+  if (!MODES[room.mode].teams) return null;
   if (room.mode === "teams") return seat % 2;
   if (room.mode === "coop" && humans < 2 && seat === humans) return 0;
   return 1;
@@ -182,8 +183,6 @@ function seatOf(room, player) {
 function botTeams(room) {
   const cfg = MODES[room.mode];
   if (!cfg.fill) return [];
-  // Project the smallest lineup that can actually start: a mode needing two humans
-  // never runs with one, so never promise the bots that seat count alone implies.
   const humans = Math.max(connectedCount(room), cfg.minHumans);
   const teams = [];
   for (let i = humans; i < SEATS; i++) teams.push(botTeam(room, i, humans));
@@ -233,8 +232,6 @@ function roster(room) {
 function lobbyState(room, viewer) {
   const cfg = MODES[room.mode];
   const bots = botTeams(room);
-  // Allies are relative to the viewer: in teams mode humans sit on both sides,
-  // so one bot is an ally to half the room and an enemy to the other half.
   const seat = viewer ? seatOf(room, viewer) : -1;
   const myTeam = seat >= 0 ? teamForSeat(room, seat) : null;
   const allies = myTeam == null ? 0 : bots.filter((t) => t === myTeam).length;
